@@ -59,7 +59,7 @@ app.get("/api/config", async (_req, res) => {
   const visible = published ? exams.filter((e) => published.includes(e.id)) : exams;
   return res.json({
     isDev: IS_DEV,
-    hasApiKey: Boolean(process.env.OPENAI_API_KEY),
+    hasApiKey: IS_DEV && Boolean(process.env.OPENAI_API_KEY),
     examCount: visible.length,
   });
 });
@@ -214,6 +214,10 @@ app.post("/api/exams/:id/pdf", async (req, res) => {
 // finished exam on completion.  The generation terminal is never exposed to
 // the user — they only see a progress overlay with human-readable status.
 app.get("/api/exams/generate", async (req, res) => {
+  if (!IS_DEV) {
+    return res.status(403).json({ error: "Exam generation is only available in dev mode." });
+  }
+
   const questionCount = Math.max(1, Math.min(200, Number(req.query.questionCount || 30)));
 
   res.setHeader("Content-Type", "text/event-stream");
