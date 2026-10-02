@@ -1,13 +1,44 @@
 import { z } from "zod";
 
+const difficultySchema = z.enum(["medium", "hard", "very_hard"]);
+
+const batchPlanSchema = z.object({
+  id: z.string().min(1),
+  domainId: z.string().min(1).optional(),
+  domainName: z.string().min(1).optional(),
+  typeFocus: z
+    .array(
+      z.enum([
+        "single_choice",
+        "multi_select",
+        "sequence_order",
+        "matching_magnet",
+        "case_study",
+        "code_or_config_artifact",
+      ])
+    )
+    .min(1)
+    .max(6),
+  difficultyFocus: z.array(difficultySchema).min(1).max(3),
+  caseStudyId: z.string().min(1).optional(),
+  questionCount: z.number().int().min(1).max(200),
+});
+
+const generationPlanSchema = z
+  .object({
+    totalQuestions: z.number().int().min(1).max(200).optional(),
+    batches: z.array(batchPlanSchema).min(1).max(200),
+  })
+  .passthrough();
+
 export const blueprintRequestSchema = z.object({
   questionCount: z.number().int().min(1).max(200),
 });
 
 export const generateBatchRequestSchema = z.object({
-  plan: z.any(),
-  batch: z.any(),
-  existingQuestionStems: z.array(z.string()).default([]),
+  plan: generationPlanSchema,
+  batch: batchPlanSchema,
+  existingQuestionStems: z.array(z.string()).max(200).default([]),
 });
 
 export const validateBatchRequestSchema = z.object({

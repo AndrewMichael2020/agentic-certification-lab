@@ -33,7 +33,7 @@ import { assembleExam, createPlan, generateBatch, validateBatch } from "./genera
 import { getAttempt, getExam, listExams, saveAttempt, saveExam } from "./persistence.js";
 import { scoreAttempt } from "./scoring.js";
 import { buildDomainSubskillDrill, buildMistakeReplay, buildWeakDomainDrill } from "./studyLoops.js";
-import { Attempt } from "./types.js";
+import { Attempt, BatchPlan, GenerationPlan } from "./types.js";
 import {
   assembleRequestSchema,
   attemptRequestSchema,
@@ -111,8 +111,8 @@ app.post("/api/questions/generate-batch", async (req, res) => {
   const parsed = generateBatchRequestSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
   const { questions, caseStudy } = await generateBatch(
-    parsed.data.plan,
-    parsed.data.batch,
+    parsed.data.plan as unknown as GenerationPlan,
+    parsed.data.batch as BatchPlan,
     parsed.data.existingQuestionStems
   );
   return res.json({ questions, caseStudy });
