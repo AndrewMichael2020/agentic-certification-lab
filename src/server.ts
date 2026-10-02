@@ -25,8 +25,7 @@ function writePublishedIds(ids: string[]): void {
 /** For production filtering — returns null in dev (show all). */
 function loadPublishedIds(): string[] | null {
   if (IS_DEV) return null;
-  const ids = readPublishedIds();
-  return ids.length ? ids : null;
+  return readPublishedIds();
 }
 
 import { assembleExam, createPlan, generateBatch, validateBatch } from "./generation.js";
@@ -56,7 +55,7 @@ app.get("/healthz", (_req, res) => {
 app.get("/api/config", async (_req, res) => {
   const exams = await listExams();
   const published = loadPublishedIds();
-  const visible = published ? exams.filter((e) => published.includes(e.id)) : exams;
+  const visible = published === null ? exams : exams.filter((e) => published.includes(e.id));
   return res.json({
     isDev: IS_DEV,
     hasApiKey: Boolean(process.env.OPENAI_API_KEY),
@@ -70,7 +69,7 @@ app.get("/api/config", async (_req, res) => {
 app.get("/api/exams", async (_req, res) => {
   const all = await listExams();
   const published = loadPublishedIds();
-  if (published) {
+  if (published !== null) {
     // Production: filter to published list only
     return res.json(all.filter((e) => published.includes(e.id)));
   }
@@ -304,6 +303,11 @@ app.get("/api/exams/generate", async (req, res) => {
 });
 
 app.get("/api/exams/:id", async (req, res) => {
+  const published = loadPublishedIds();
+  if (published !== null && !published.includes(req.params.id)) {
+    return res.status(404).json({ error: "Exam not found" });
+  }
+
   const exam = await getExam(req.params.id);
   if (!exam) return res.status(404).json({ error: "Exam not found" });
   return res.json(exam);
