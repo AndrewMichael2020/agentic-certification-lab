@@ -79,14 +79,26 @@ app.get("/api/exams", async (_req, res) => {
   return res.json(all.map((e) => ({ ...e, isPublished: publishedSet.has(e.id) })));
 });
 
+const windowMs = 60_000;
+const maxPerWindow = 120;
 const requestTracker = new Map<string, { count: number; resetAt: number }>();
+
+function pruneExpiredRequestBuckets(now = Date.now()): void {
+  for (const [key, bucket] of requestTracker) {
+    if (now > bucket.resetAt) {
+      requestTracker.delete(key);
+    }
+  }
+}
+
 app.use((req, res, next) => {
-  const key = `${req.ip}:${req.path}`;
+  const key = req.ip ?? req.socket.remoteAddress ?? "unknown";
   const now = Date.now();
-  const windowMs = 60_000;
-  const maxPerWindow = 120;
   const bucket = requestTracker.get(key);
   if (!bucket || now > bucket.resetAt) {
+    if (bucket) {
+      requestTracker.delete(key);
+    }
     requestTracker.set(key, { count: 1, resetAt: now + windowMs });
     return next();
   }
@@ -94,9 +106,10 @@ app.use((req, res, next) => {
     return res.status(429).json({ error: "Rate limit exceeded" });
   }
   bucket.count += 1;
-  requestTracker.set(key, bucket);
   return next();
 });
+
+setInterval(() => pruneExpiredRequestBuckets(), windowMs).unref();
 app.use(express.static(path.join(process.cwd(), "public")));
 // Serve generated PDFs (and other exam files) from data/exams/
 app.use("/exams", express.static(path.join(process.cwd(), "data/exams")));
