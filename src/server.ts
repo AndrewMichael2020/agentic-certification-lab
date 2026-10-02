@@ -114,13 +114,20 @@ app.use(express.static(path.join(process.cwd(), "public")));
 // Serve generated PDFs (and other exam files) from data/exams/
 app.use("/exams", express.static(path.join(process.cwd(), "data/exams")));
 
-app.post("/api/exams/blueprint", (req, res) => {
+function requireDevMode(_req: express.Request, res: express.Response, next: express.NextFunction) {
+  if (!IS_DEV) {
+    return res.status(403).json({ error: "Exam generation is only available in dev mode." });
+  }
+  return next();
+}
+
+app.post("/api/exams/blueprint", requireDevMode, (req, res) => {
   const parsed = blueprintRequestSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
   return res.json(createPlan(parsed.data.questionCount));
 });
 
-app.post("/api/questions/generate-batch", async (req, res) => {
+app.post("/api/questions/generate-batch", requireDevMode, async (req, res) => {
   const parsed = generateBatchRequestSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
   const { questions, caseStudy } = await generateBatch(
@@ -131,13 +138,13 @@ app.post("/api/questions/generate-batch", async (req, res) => {
   return res.json({ questions, caseStudy });
 });
 
-app.post("/api/questions/validate-batch", (req, res) => {
+app.post("/api/questions/validate-batch", requireDevMode, (req, res) => {
   const parsed = validateBatchRequestSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
   return res.json({ questions: validateBatch(parsed.data.questions) });
 });
 
-app.post("/api/exams/assemble", async (req, res) => {
+app.post("/api/exams/assemble", requireDevMode, async (req, res) => {
   const parsed = assembleRequestSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
   const exam = assembleExam(parsed.data.plan, parsed.data.questions, parsed.data.caseStudies);
@@ -226,7 +233,7 @@ app.post("/api/exams/:id/pdf", async (req, res) => {
 // The client connects once; the server streams batch progress and sends the
 // finished exam on completion.  The generation terminal is never exposed to
 // the user — they only see a progress overlay with human-readable status.
-app.get("/api/exams/generate", async (req, res) => {
+app.get("/api/exams/generate", requireDevMode, async (req, res) => {
   const questionCount = Math.max(1, Math.min(200, Number(req.query.questionCount || 30)));
 
   res.setHeader("Content-Type", "text/event-stream");
