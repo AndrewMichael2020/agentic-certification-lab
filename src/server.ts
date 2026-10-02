@@ -1,7 +1,7 @@
 import express from "express";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { generateExamPdf } from "./pdfExport.js";
+import { examPdfStem, generateExamPdf } from "./pdfExport.js";
 import { v4 as uuidv4 } from "uuid";
 
 const IS_DEV = process.env.NODE_ENV !== "production";
@@ -22,11 +22,15 @@ function writePublishedIds(ids: string[]): void {
   writeFileSync(PUBLISHED_PATH, JSON.stringify({ examIds: ids }, null, 2) + "\n", "utf8");
 }
 
-/** For production filtering — returns null in dev (show all). */
+/** For production filtering — returns null only in dev (show all). */
 function loadPublishedIds(): string[] | null {
   if (IS_DEV) return null;
-  const ids = readPublishedIds();
-  return ids.length ? ids : null;
+  return readPublishedIds();
+}
+
+function isExamPublished(examId: string): boolean {
+  const published = loadPublishedIds();
+  return published === null || published.includes(examId);
 }
 
 import { assembleExam, createPlan, generateBatch, validateBatch } from "./generation.js";
@@ -111,7 +115,19 @@ app.use((req, res, next) => {
 
 setInterval(() => pruneExpiredRequestBuckets(), windowMs).unref();
 app.use(express.static(path.join(process.cwd(), "public")));
-// Serve generated PDFs (and other exam files) from data/exams/
+// Serve generated PDFs from data/exams/. In production, only published exams are visible.
+app.use("/exams", async (req, res, next) => {
+  if (IS_DEV) return next();
+
+  const requested = path.basename(req.path);
+  const published = loadPublishedIds() ?? [];
+  for (const id of published) {
+    const exam = await getExam(id);
+    if (exam && `${examPdfStem(exam)}.pdf` === requested) return next();
+  }
+
+  return res.status(404).json({ error: "Exam not found" });
+});
 app.use("/exams", express.static(path.join(process.cwd(), "data/exams")));
 
 function requireDevMode(_req: express.Request, res: express.Response, next: express.NextFunction) {
@@ -200,9 +216,9 @@ app.post("/api/exams/:id/publish", (req, res) => {
 // POST /api/exams/:id/pdf         → triggers Playwright PDF build
 
 app.get("/api/exams/:id/pdf-status", async (req, res) => {
+  if (!isExamPublished(req.params.id)) return res.status(404).json({ error: "Exam not found" });
   const exam = await getExam(req.params.id);
   if (!exam) return res.status(404).json({ error: "Exam not found" });
-  const { examPdfStem } = await import("./pdfExport.js");
   const { resolvePdfStatus } = await import("./storage.js");
   const stem = examPdfStem(exam);
   const filename = `${stem}.pdf`;
@@ -324,6 +340,7 @@ app.get("/api/exams/generate", requireDevMode, async (req, res) => {
 });
 
 app.get("/api/exams/:id", async (req, res) => {
+  if (!isExamPublished(req.params.id)) return res.status(404).json({ error: "Exam not found" });
   const exam = await getExam(req.params.id);
   if (!exam) return res.status(404).json({ error: "Exam not found" });
   return res.json(exam);
