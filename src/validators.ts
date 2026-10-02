@@ -4,10 +4,58 @@ export const blueprintRequestSchema = z.object({
   questionCount: z.number().int().min(1).max(200),
 });
 
+const difficultySchema = z.enum(["medium", "hard", "very_hard"]);
+const itemTypeSchema = z.enum([
+  "single_choice",
+  "multi_select",
+  "sequence_order",
+  "matching_magnet",
+  "case_study",
+  "code_or_config_artifact",
+]);
+
+const domainBlueprintSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  count: z.number().int().min(0).max(200),
+});
+
+const itemTypeBlueprintSchema = z.object({
+  single_choice: z.number().int().min(0).max(200),
+  multi_select: z.number().int().min(0).max(200),
+  sequence_order: z.number().int().min(0).max(200),
+  matching_magnet: z.number().int().min(0).max(200),
+  case_study: z.number().int().min(0).max(200),
+  code_or_config_artifact: z.number().int().min(0).max(200),
+});
+
+const difficultyDistributionSchema = z.object({
+  medium: z.number().int().min(0).max(200),
+  hard: z.number().int().min(0).max(200),
+  very_hard: z.number().int().min(0).max(200),
+});
+
+const batchPlanSchema = z.object({
+  id: z.string().min(1),
+  domainId: z.string().optional(),
+  domainName: z.string().optional(),
+  typeFocus: z.array(itemTypeSchema).min(1).max(6),
+  difficultyFocus: z.array(difficultySchema).min(1).max(3),
+  caseStudyId: z.string().optional(),
+  questionCount: z.number().int().min(1).max(200),
+});
+
 export const generateBatchRequestSchema = z.object({
-  plan: z.any(),
-  batch: z.any(),
-  existingQuestionStems: z.array(z.string()).default([]),
+  plan: z.object({
+    totalQuestions: z.number().int().min(1).max(200),
+    domains: z.array(domainBlueprintSchema).min(1).max(200),
+    itemTypes: itemTypeBlueprintSchema,
+    caseStudyCount: z.number().int().min(0).max(200),
+    difficulty: difficultyDistributionSchema,
+    batches: z.array(batchPlanSchema).min(1).max(200),
+  }),
+  batch: batchPlanSchema,
+  existingQuestionStems: z.array(z.string()).max(200).default([]),
 });
 
 export const validateBatchRequestSchema = z.object({
